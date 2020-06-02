@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">VoiceAssistant</string>
+    <string name="tab_text_1">首頁</string>
+    <string name="tab_text_2">逐字稿</string>
+    <string name="tab_text_3">通話紀錄</string>
+</resources>
