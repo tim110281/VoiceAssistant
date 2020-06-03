@@ -207,10 +207,7 @@ class Frag1 : Fragment() {
         }
 
         if(numberBeginIndex != -1) {
-            output(total.toString())
             newString = str.replace(str.substring(numberBeginIndex, str.length), total.toString())
-
-            output(newString)
         }
 
         return newString
