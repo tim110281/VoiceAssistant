@@ -52,7 +52,7 @@ class Frag1 : Fragment() {
     private var bufferSizeOutByte: Int = 0//Minimum playing buffer
     private var audioTracker: AudioTrack? = null
 
-    // 3. others. button's flag to see if it's been pressed or not
+    // 3. others. Declare a button's flag to see if it's been pressed or not
     var flag: Boolean = false
     var fileName: String = ""
 
@@ -159,14 +159,18 @@ class Frag1 : Fragment() {
 
     }
 
-    val chineseNum:String = "零一二三四五六七八九十百千"
+    private val chineseNum = mutableMapOf<String,Int>("零" to 0, "一" to 1, "二" to 2, "兩" to 2, "三" to 3, "四" to 4, "五" to 5, "六" to 6, "七" to 7, "八" to 8, "九" to 9, "十" to 10, "百" to 100, "千" to 1000)
+
+    private fun getTenDigit(num: Int) : Int{
+        return num % 10
+    }
     fun chineseToNum(str: String) : String {
         var newString: String = ""
         var total:Int = 0
         var numberBeginIndex = -1
         var flag = false
         for(i in 0..(str.length-1)) {
-            if(str[i] in chineseNum) {
+            if(chineseNum.keys.contains(str[i].toString())) {
                 if(!flag) {
                     numberBeginIndex = i
                     flag = true
@@ -178,27 +182,33 @@ class Frag1 : Fragment() {
                         total += 1000
                     }
                     else {
-                        total += chineseNum.indexOf(str[i],0)
+                        total += chineseNum.getValue(str[i].toString())
                     }
                 }
                 else {
                     if(str[i] == '十') {
-                        total *= 10
+                        var tmp:Int = getTenDigit(total)
+                        total -= tmp
+                        total += (tmp*10)
                     }
                     else if(str[i] == '百') {
-                        total *= 100
+                        var tmp:Int = getTenDigit(total)
+                        total -= tmp
+                        total += (tmp*100)
                     }
                     else if(str[i] == '千') {
-                        total *= 1000
+                        var tmp:Int = getTenDigit(total)
+                        total -= tmp
+                        total += (tmp*1000)
                     }
                     else {
-                        total += chineseNum.indexOf(str[i],0)
+                        total += chineseNum.getValue(str[i].toString())
                     }
                 }
             }
             else {
                 if(flag) {
-                    newString = str.replace(str.substring(numberBeginIndex, i-1), total.toString())
+                    newString = str.replace(str.substring(numberBeginIndex, i), total.toString())
                     numberBeginIndex = -1
                     flag = false
                     total = 0
@@ -232,6 +242,7 @@ class Frag1 : Fragment() {
             isRecord = true
             startRecording()
 
+            button.isEnabled = true
             output("開始錄音")
         }
 
@@ -273,8 +284,6 @@ class Frag1 : Fragment() {
             super.onClosed(webSocket, code, reason)
 
             // 0. stop recording
-            output("onClosed: $code/$reason")
-            output("結束錄音")
             isRecord = false
             stopRecording()
 
@@ -309,6 +318,10 @@ class Frag1 : Fragment() {
 
             // 3. close tcp socket
             socket?.close()
+
+            button.isEnabled = true
+            output("onClosed: $code/$reason")
+            output("結束錄音")
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -332,6 +345,9 @@ class Frag1 : Fragment() {
             stopRecording()
             socket?.close()
 
+            flag = false
+            button.text = "連線"
+            button.isEnabled = true
         }
     }
 
@@ -438,14 +454,18 @@ class Frag1 : Fragment() {
     // press '錄音' button to invoke this function
     private fun pressButton() {
         if(!flag) {
+            button.isEnabled = false
             flag = true
             button.text = "斷線"
             connect()
+
         }
         else {
+            button.isEnabled = false
             flag = false
             button.text = "連線"
             disconnect()
+
 
             // 3. close tcp socket
             val thread = Thread(Runnable { disconnectTcpSocket() })
