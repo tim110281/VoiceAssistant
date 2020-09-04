@@ -1,10 +1,6 @@
 import pyrebase
-config = {
-	"authDomain": "voiceassistant-424d9.firebaseapp.com",
-	"databaseURL": "https://voiceassistant-424d9.firebaseio.com",
-	"storageBucket": "voiceassistant-424d9.appspot.com"
-}
-firebase = pyrebase.initialize_app(config)
+import config
+firebase = pyrebase.initialize_app(config.config)
 
 # push data into database
 db = firebase.database()
