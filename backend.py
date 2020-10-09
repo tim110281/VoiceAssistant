@@ -15,8 +15,9 @@ import optimization
 import tokenization
 import six
 import tensorflow as tf
-
-
+import time
+from datetime import datetime
+from threading import Thread, Lock
 flags = tf.flags
 
 FLAGS = flags.FLAGS
@@ -141,9 +142,12 @@ flags.DEFINE_float(
 		"null_score_diff_threshold", 0.0,
 		"If null_score - best_non_null is greater than the threshold predict null.")
 
-
+global commandQueue, eval_examples, eval_features, all_results
 commandQueue = collections.deque([])
-
+eval_examples = []
+eval_features = []
+all_results = []
+mutex = Lock()
 class SquadExample(object):
 	"""A single training/test example for simple sequence classification.
 
@@ -263,7 +267,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
 	"""Loads a data file into a list of `InputBatch`s."""
 
 	unique_id = 100
-
+	features = []
 	for (example_index, example) in enumerate(examples):
 		query_tokens = tokenizer.tokenize(example.question_text)
 
@@ -417,11 +421,12 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
 					start_position=start_position,
 					end_position=end_position,
 					is_impossible=example.is_impossible)
-
+			features . append(feature)
 			# Run callback
-			output_fn(feature)
+			# output_fn(feature)
 
 			unique_id += 1
+	return features
 
 
 def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer,
@@ -545,9 +550,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
 
 	def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
 		"""The `model_fn` for TPUEstimator."""
-		# print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-		# print(features)
-		# print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+
 		tf.logging.info("*** Features ***")
 		for name in sorted(features.keys()):
 			tf.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
@@ -642,46 +645,68 @@ def ipfnb():
 		vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)
 
 	def gen():
+		global commandQueue, eval_examples, eval_features, all_results
+
 		seq_length = FLAGS.max_seq_length
-		import time
 		while 1:
 			while not len(commandQueue):
-				a = 1
+				time.sleep(1)
 			paragraph_text = commandQueue.popleft()
+			example0 = SquadExample(
+				qas_id="0",
+				question_text="病患編號為何？",
+				doc_tokens=tokenizer.basic_tokenizer.tokenize(paragraph_text))
 			example1 = SquadExample(
 				qas_id="0",
-				question_text="病患目前體溫為何？",
+				question_text="病患目前舒張壓為何？",
 				doc_tokens=tokenizer.basic_tokenizer.tokenize(paragraph_text))
 			example2 = SquadExample(
 				qas_id="0",
-				question_text="患者身高為何？",
+				question_text="患者收縮壓為何？",
 				doc_tokens=tokenizer.basic_tokenizer.tokenize(paragraph_text))
 			example3 = SquadExample(
 				qas_id="0",
-				question_text="患者血糖為何？",
+				question_text="患者姓名為何？",
 				doc_tokens=tokenizer.basic_tokenizer.tokenize(paragraph_text))
-			eval_examples = [example1,example2,example3]
+			example4 = SquadExample(
+				qas_id="0",
+				question_text="病患目前脈搏為何？",
+				doc_tokens=tokenizer.basic_tokenizer.tokenize(paragraph_text))
+			example5 = SquadExample(
+				qas_id="0",
+				question_text="病患目前呼吸頻率為何？",
+				doc_tokens=tokenizer.basic_tokenizer.tokenize(paragraph_text))
+			example6 = SquadExample(
+				qas_id="0",
+				question_text="病患目前體溫為何？",
+				doc_tokens=tokenizer.basic_tokenizer.tokenize(paragraph_text))
+			eval_examples.append(example0)
+			eval_examples.append(example1)
+			eval_examples.append(example2)
+			eval_examples.append(example3)
+			eval_examples.append(example4)
+			eval_examples.append(example5)
+			eval_examples.append(example6)
 
-			eval_features = []
-
-			def append_feature(feature):
-				eval_features.append(feature)
-			convert_examples_to_features(
+			# def append_feature(feature):
+			# 	eval_features.append(feature)
+			features  = convert_examples_to_features(
 					examples=eval_examples,
 					tokenizer=tokenizer,
 					max_seq_length=FLAGS.max_seq_length,
 					doc_stride=FLAGS.doc_stride,
 					max_query_length=FLAGS.max_query_length,
 					is_training=False,
-					output_fn=append_feature)
-
-			feature = eval_features[0]
-			yield {
-				"unique_ids": feature.unique_id,
-				"input_ids": [feature.input_ids],
-				"input_mask": [feature.input_mask],
-				"segment_ids": [feature.segment_ids],
-				}
+					output_fn=None)
+			eval_features += features 
+			for feature in eval_features:
+				yield {
+					"unique_ids": feature.unique_id,
+					"input_ids": [feature.input_ids],
+					"input_mask": [feature.input_mask],
+					"segment_ids": [feature.segment_ids],
+					}
+			time.sleep(3)
 	def input_fn(params):
 		max_seq_len = 384
 		return (tf.data.Dataset.from_generator(gen,
@@ -741,8 +766,7 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
 	return input_fn
 
 
-RawResult = collections.namedtuple("RawResult",
-																	 ["unique_id", "start_logits", "end_logits"])
+RawResult = collections.namedtuple("RawResult",["unique_id", "start_logits", "end_logits"])
 
 def parse_predictions(all_examples, all_features, all_results, n_best_size,max_answer_length=30, do_lower_case=True):
 	"""Write final predictions to the json file and log-odds of null if needed."""
@@ -1146,72 +1170,43 @@ def main(_):
 			config=run_config,
 			train_batch_size=FLAGS.train_batch_size,
 			predict_batch_size=FLAGS.predict_batch_size)
-	msg = "患者叫做陳之漢，凌晨兩點遭到槍擊送入手術房，舒張壓80mmhg，收縮壓100mmhg，血糖值50ml，身高185cm，體重120kg，體溫37.1度，病患目前身體狀況穩定，預計一星期後即可出院。"
+	# msg = "患者叫做陳之漢，凌晨兩點遭到槍擊送入手術房，舒張壓80mmhg，收縮壓100mmhg，血糖值50ml，身高185cm，體重120kg，體溫37.1度，病患目前身體狀況穩定，預計一星期後即可出院。"
+	global commandQueue, eval_examples, eval_features, all_results
 
 	def command_handler(message):
-		commandQueue.append(msg)
-		print("!!!!!!!!!!!!!!!!!!!!!!!!!!",len(commandQueue))
-		print("receive from ",message['path'])
-		paragraph_text = message["data"]
-		example1 = SquadExample(
-			qas_id="0",
-			question_text="病患目前體溫為何？",
-			doc_tokens=tokenizer.basic_tokenizer.tokenize(paragraph_text))
-		example2 = SquadExample(
-			qas_id="0",
-			question_text="患者身高為何？",
-			doc_tokens=tokenizer.basic_tokenizer.tokenize(paragraph_text))
-		example3 = SquadExample(
-			qas_id="0",
-			question_text="患者血糖為何？",
-			doc_tokens=tokenizer.basic_tokenizer.tokenize(paragraph_text))
-		eval_examples = [example1,example2,example3]
 
-		eval_writer = FeatureWriter(
-				filename=os.path.join(FLAGS.output_dir, "eval.tf_record"),
-				is_training=False)
-		eval_features = []
-
-		def append_feature(feature):
-			eval_features.append(feature)
-			eval_writer.process_feature(feature)
-
-		convert_examples_to_features(
-				examples=eval_examples,
-				tokenizer=tokenizer,
-				max_seq_length=FLAGS.max_seq_length,
-				doc_stride=FLAGS.doc_stride,
-				max_query_length=FLAGS.max_query_length,
-				is_training=False,
-				output_fn=append_feature)
-		eval_writer.close()
-
-		predict_input_fn = input_fn_builder(
-				input_file=eval_writer.filename,
-				seq_length=FLAGS.max_seq_length,
-				is_training=False,
-				drop_remainder=False)
-
-		# If running eval on the TPU, you will need to specify the number of
-		# steps.
-
-		all_results = []
-		for result in estimator.predict(
-				predict_input_fn, yield_single_examples=False):
-			if len(all_results) % 1000 == 0:
-				tf.logging.info("Processing example: %d" % (len(all_results)))
-			unique_id = int(result["unique_ids"])
-			start_logits = [float(x) for x in result["start_logits"].flat]
-			end_logits = [float(x) for x in result["end_logits"].flat]
-			all_results.append(
-					RawResult(
-							unique_id=unique_id,
-							start_logits=start_logits,
-							end_logits=end_logits))
-		print("!!!!!!!",len(all_results))
-		predictions = parse_predictions(eval_examples,eval_features,all_results,FLAGS.n_best_size)
-		print(predictions)
+		commandQueue.append(message['data'])
 	cmd_handler_id = db.child("example").child("command").stream(command_handler)
+	questionTable = ["ID","BP_DIASTOLIC","BP_SYSTOLIC","Name","PULSE","RESPIRE","TEMPERATURE"]
+	for result in estimator.predict(ipfnb(), yield_single_examples=False):
+		all_results.append(
+						RawResult(
+							unique_id=int(result['unique_ids']),
+							start_logits=[float(x) for x in result["start_logits"].flat],
+							end_logits=[float(x) for x in result["end_logits"].flat]
+						)
+					)
+		if len(all_results) == len(questionTable) :
+			print(len(eval_examples),len(eval_features),len(all_results))
+			predictions = parse_predictions(eval_examples,eval_features,all_results,FLAGS.n_best_size)
+			patientId, IdProbability = predictions[0]
+			if IdProbability  <0.95 :
+				print("ID number is implict!! drop this record of ID :",patientId)
+			else :
+				data = {}
+				for i,pred in enumerate(predictions[1:]):
+					info, infoProb = pred
+					if infoProb <0.95 :
+						info += "(unsure)"
+					db.child("example").child("patientRecord").child("ID"+patientId).child(questionTable[i+1]).set(info)
+				dt_object = str(datetime.fromtimestamp(time.time()))
+				dt_object = dt_object[:-10].replace("-","/")
+				db.child("example").child("patientRecord").child("ID"+patientId).child("Time").set(dt_object)
+
+
+			eval_features.clear()
+			eval_examples.clear()
+			all_results.clear()
 
 if __name__ == "__main__":
 	flags.mark_flag_as_required("vocab_file")
