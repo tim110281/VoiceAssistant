@@ -1,14 +1,30 @@
 package com.example.voiceassistant.ui.main
 
+import android.app.Service
+import android.content.ComponentName
+import android.content.ContentValues.TAG
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.media.*
 import android.os.Bundle
+import android.os.IBinder
 import android.text.method.ScrollingMovementMethod
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProviders
+import com.example.voiceassistant.Main2Activity
 import com.example.voiceassistant.R
+import com.example.voiceassistant.c2cService
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.DatabaseReference
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.ktx.database
+import com.google.firebase.ktx.Firebase
 import kotlinx.android.synthetic.main.frag1_fragment.*
 import kotlinx.android.synthetic.main.frag1_fragment.view.*
 import okhttp3.*
@@ -19,6 +35,7 @@ import java.net.InetAddress
 import java.net.Socket
 import java.text.SimpleDateFormat
 import java.util.*
+
 
 class Frag1 : Fragment() {
 
@@ -53,10 +70,10 @@ class Frag1 : Fragment() {
     private var audioTracker: AudioTrack? = null
 
     // 3. others. Declare a button's flag to see if it's been pressed or not
-    var flag: Boolean = false
+    var connectionButtonFlag: Boolean = false
     var fileName: String = ""
 
-    // 4. record the information of patients
+    // 4. Patient's information
     class Patient {
         var chart_no: String = ""
         var name: String = ""
@@ -65,11 +82,22 @@ class Frag1 : Fragment() {
         var temperature: Int = 0
         var pulse: Int = 0
         var respire: Int = 0
+        var date: String = ""
     }
 
+    // 5. Nurse's information
     var name: String = ""
     var ID: String = ""
-    var date: String = ""
+
+    // 6. some variables related to FireBase
+    //var database = FirebaseDatabase.getInstance()
+    //var myRef = database.getReference()
+    private lateinit var database: DatabaseReference
+
+    // 7. c2c Service
+    private var myC2cService: c2cService? = null
+    private lateinit var serviceIntent:Intent
+
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -84,6 +112,30 @@ class Frag1 : Fragment() {
         val textView = view.textView
         textView.movementMethod = ScrollingMovementMethod.getInstance()
 
+        // Firebase callback function
+        database = Firebase.database.reference.child("example")
+        database.child("nurseLoginRecord").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(dataSnapshot: DataSnapshot) {
+                // This method is called once with the initial value and again
+                // whenever data at this location is updated.
+                val value = dataSnapshot.children
+                value.forEach { Log.i("value:", it.key.toString() + it.value.toString()) }
+
+                //Log.i("123", value.toString())
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                // Failed to read value
+            }
+        })
+
+        // start c2c service
+        serviceIntent = Intent(this.activity, c2cService::class.java)
+        serviceIntent.putExtra("c2cAccount", "VOIP0001@jalabell.iptnet.net")
+        serviceIntent.putExtra("c2cPassword", "voip1234")
+        this.activity?.startService(serviceIntent)
+        this.activity?.bindService(serviceIntent, mC2cServiceConnection, Service.BIND_AUTO_CREATE)
+
         return view
     }
 
@@ -93,11 +145,44 @@ class Frag1 : Fragment() {
         // TODO: Use the ViewModel
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        //this.activity?.stopService(serviceIntent)
+    }
+
+    var mC2cServiceConnection: ServiceConnection = object : ServiceConnection {
+        // 成功與 Service 建立連線
+        override fun onServiceConnected(name: ComponentName?, service: IBinder) {
+            myC2cService = (service as c2cService.MyBinder).service
+            Log.d(TAG, "MainActivity onServiceConnected")
+        }
+
+        // 與 Service 建立連線失敗
+        override fun onServiceDisconnected(name: ComponentName?) {
+            myC2cService = null
+            Log.d(TAG, "MainActivity onServiceFailed")
+        }
+    }
+
     // show text on screen
     fun output(text: String) {
         activity?.runOnUiThread(Runnable {
-            val newText = "${textView.text.toString()} \n $text"
-            textView.text = newText
+            if(textView.text == "") {
+                textView.text = text
+            }
+            else {
+                var newString = ""
+                val arrayofString = textView.text.split("\n")
+                if(arrayofString.size > 3) {
+                    val subArrayofString = arrayofString.subList(1, arrayofString.size)
+                    newString = subArrayofString.joinToString("\n")
+
+                }
+                else {
+                    newString = textView.text.toString()
+                }
+                textView.text = "${newString} \n $text"
+            }
         })
     }
 
@@ -117,12 +202,35 @@ class Frag1 : Fragment() {
 
     // =================== 解析語音文字，做對應的工作 (begin)=================== //
     fun parseCommandText(text: String) {
-        lateinit var thread: Thread
-        var myJsonString: String = ""
 
         if("登錄" in text) {
+            output("登錄")
             if(name != "" && name != "Name" && ID != "" && ID != "ID") {
-                val subJSONObject = JSONObject()
+                var isInRecord = false
+                var ref = database.child("nurseLoginRecord").orderByKey().equalTo("ID"+ ID)
+                ref.addListenerForSingleValueEvent(object : ValueEventListener{
+                    override fun onDataChange(dataSnapshot: DataSnapshot) {
+                        if (dataSnapshot.value != null) {
+                            isInRecord = true
+
+                            val dateformat = "yyyy/MM/dd kk:mm"
+                            val df = SimpleDateFormat(dateformat)
+                            val mCal: Calendar = Calendar.getInstance()
+                            val now: String = df.format(mCal.time)
+
+                            database.child("nurseLoginRecord").child("ID"+ ID).child("loginTime").setValue(now)
+                        }
+                        else {
+                            output("this ID does not exist")
+                        }
+                        Log.i("real value:", dataSnapshot.toString())
+                    }
+                    override fun onCancelled(error: DatabaseError) {
+                        // Failed to read value
+                    }
+                })
+
+                /*val subJSONObject = JSONObject()
                 subJSONObject.put("Name", name)
                 subJSONObject.put("NurseNo", ID.toInt())
                 subJSONObject.put("Command", "Login")
@@ -130,14 +238,38 @@ class Frag1 : Fragment() {
                 myJsonString = subJSONObject.toString()
 
                 thread = Thread(Runnable { sendDataToTcpServer(myJsonString) })
-                thread.start()
+                thread.start()*/
             }
             else {
                 output("請輸入 名字 和 ID ")
             }
         }
         else if("登出" in text) {
-            val subJSONObject = JSONObject()
+            var isInRecord = false
+            var ref = database.child("nurseLoginRecord").orderByKey().equalTo("ID"+ ID)
+            ref.addListenerForSingleValueEvent(object : ValueEventListener{
+                override fun onDataChange(dataSnapshot: DataSnapshot) {
+                    if (dataSnapshot.value != null && dataSnapshot.child("ID"+ ID).child("loginTime").value != null) {
+                        isInRecord = true
+
+                        val dateformat = "yyyy/MM/dd kk:mm"
+                        val df = SimpleDateFormat(dateformat)
+                        val mCal: Calendar = Calendar.getInstance()
+                        val now: String = df.format(mCal.time)
+
+                        database.child("nurseLoginRecord").child("ID"+ ID).child("logoutTime").setValue(now)
+                    }
+                    else {
+                        output("this ID does not exist, or you haven't logged in yet.")
+                    }
+                    Log.i("real value:", dataSnapshot.toString())
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    // Failed to read value
+                }
+            })
+
+            /*val subJSONObject = JSONObject()
             subJSONObject.put("Name", name)
             subJSONObject.put("NurseNo", ID.toInt())
             subJSONObject.put("Command", "Login")
@@ -145,9 +277,15 @@ class Frag1 : Fragment() {
             myJsonString = subJSONObject.toString()
 
             thread = Thread(Runnable { sendDataToTcpServer(myJsonString) })
-            thread.start()
+            thread.start()*/
         }
         else if("打電話" in text) {
+            output("打電話...")
+            val intent = Intent(activity, Main2Activity::class.java).apply {
+                putExtra("callerOrcallee", true)
+                putExtra("callee", "VOIP0002@jalabell.iptnet.net")
+            }
+            startActivity(intent)
 
         }
         else if("記錄" in text) {
@@ -156,22 +294,33 @@ class Frag1 : Fragment() {
         else if("修正" in text) {
 
         }
+        else {
+            database.child("command").setValue(text)
+        }
 
     }
 
     private val chineseNum = mutableMapOf<String,Int>("零" to 0, "一" to 1, "二" to 2, "兩" to 2, "三" to 3, "四" to 4, "五" to 5, "六" to 6, "七" to 7, "八" to 8, "九" to 9, "十" to 10, "百" to 100, "千" to 1000)
 
-    private fun getTenDigit(num: Int) : Int{
-        return num % 10
+    private fun getTenDigit(num: Double) : Int{
+        return num.toInt() % 10
     }
     fun chineseToNum(str: String) : String {
         var newString: String = ""
-        var total:Int = 0
+        var total:Double = 0.0
         var numberBeginIndex = -1
         var flag = false
+        var isDecimal = false
+        var decimalOrder = 0.1
+        var numberEndIndex = str.length
+
         for(i in 0..(str.length-1)) {
             if(chineseNum.keys.contains(str[i].toString())) {
-                if(!flag) {
+                if(isDecimal) {
+                    total += chineseNum.getValue(str[i].toString())*decimalOrder
+                    decimalOrder *= 0.1
+                }
+                else if(!flag) {
                     numberBeginIndex = i
                     flag = true
 
@@ -207,17 +356,32 @@ class Frag1 : Fragment() {
                 }
             }
             else {
-                if(flag) {
-                    newString = str.replace(str.substring(numberBeginIndex, i), total.toString())
+                if(str[i].toString() == "點") {
+                    isDecimal = true
+                    decimalOrder = 0.1
+                }
+                else if(flag) {
+                    if(isDecimal) {
+                        newString = str.replace(str.substring(numberBeginIndex, i), total.toInt().toString())
+                    }
+                    else {
+                        newString = str.replace(str.substring(numberBeginIndex, i), total.toString())
+                    }
                     numberBeginIndex = -1
                     flag = false
-                    total = 0
+                    isDecimal = false
+                    total = 0.0
                 }
             }
         }
 
         if(numberBeginIndex != -1) {
-            newString = str.replace(str.substring(numberBeginIndex, str.length), total.toString())
+            if(isDecimal) {
+                newString = str.replace(str.substring(numberBeginIndex, str.length), total.toInt().toString())
+            }
+            else {
+                newString = str.replace(str.substring(numberBeginIndex, str.length), total.toString())
+            }
         }
 
         return newString
@@ -242,8 +406,10 @@ class Frag1 : Fragment() {
             isRecord = true
             startRecording()
 
-            button.isEnabled = true
             output("開始錄音")
+            activity?.runOnUiThread { button.isEnabled = true }
+
+            parseCommandText("打電話")
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
@@ -254,10 +420,10 @@ class Frag1 : Fragment() {
         var wholeSpeech = ""
         var line = ""
         var recvTextData = ""
-        var flag: Boolean = false   // check if the recvText is appended to wholeSpeech
+        var isAppendedFlag: Boolean = false   // check if the recvText is appended to wholeSpeech
         override fun onMessage(webSocket: WebSocket, text: String) {
             super.onMessage(webSocket, text)
-            flag = false
+            isAppendedFlag = false
 
             // receive the retured text from webserver
             val recvJSON = JSONObject(text)
@@ -269,7 +435,7 @@ class Frag1 : Fragment() {
             if(line!="") {
                 if(sameCharNum(recvTextData, line) == 0 || sameCharNum(recvTextData,line) == recvTextData.length) {
                     wholeSpeech = wholeSpeech + line + "\t"
-                    flag = true
+                    isAppendedFlag = true
                     parseCommandText(line)
                 }
             }
@@ -287,11 +453,11 @@ class Frag1 : Fragment() {
             isRecord = false
             stopRecording()
 
-            if(!flag) {
+            if(!isAppendedFlag) {
                 wholeSpeech = wholeSpeech + line + "\t"
             }
 
-            // 1. create a json format which contains speech and patients' info
+            /*// 1. create a json format which contains speech and patients' info
             val jsonObject = JSONObject()
             jsonObject.put("date", date)
             jsonObject.put("name", name)
@@ -314,12 +480,11 @@ class Frag1 : Fragment() {
                 e.printStackTrace()
             }
 
-            outputFile!!.close()
+            outputFile!!.close()*/
 
             // 3. close tcp socket
             socket?.close()
 
-            button.isEnabled = true
             output("onClosed: $code/$reason")
             output("結束錄音")
         }
@@ -334,6 +499,8 @@ class Frag1 : Fragment() {
 
                 socket?.close()
             }
+
+            activity?.runOnUiThread { button.isEnabled = true }
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -345,22 +512,18 @@ class Frag1 : Fragment() {
             stopRecording()
             socket?.close()
 
-            flag = false
-            button.text = "連線"
-            button.isEnabled = true
+            connectionButtonFlag = false
+
+            activity?.runOnUiThread { button.text = "連線"
+                button.isEnabled = true }
         }
     }
 
-    // 2. pressing '連線' button will invoke this connect function
+    // 2. Use websocket to connect to the speech_to_text server.
     private fun connect() {
         // get patient's info and the current time
         name = editText.text.toString()
         ID = editText2.text.toString()
-        val dateformat = "yyyy/MM/dd kk:mm"
-        val df = SimpleDateFormat(dateformat)
-        val mCal: Calendar = Calendar.getInstance()
-        val today: String = df.format(mCal.time)
-        date = today
 
         // websocket initialization
         val webURL = "ws://asr.iptnet.net:8080/client/ws/speech?content-type=audio/x-raw,+layout=interleaved,+rate=16000,+format=S16LE,+channels=1"
@@ -368,13 +531,13 @@ class Frag1 : Fragment() {
         val listener = EchoWebSocketListener()
         val request = Request.Builder().url(webURL).build()
         //val client = OkHttpClient()
-        //val client = OkHttpClient.Builder().readTimeout(3,  TimeUnit.SECONDS).build()
+        //val client = OkHttpClient.Builder().readTimeout(3, TimeUnit.SECONDS).build()
         val client = OkHttpClient.Builder().build()
         webSocket = client.newWebSocket(request, listener)
 
         // tcp socket initialization
-        val thread = Thread(Runnable { setTcpSocket() })
-        thread.start()
+        //val thread = Thread(Runnable { setTcpSocket() })
+        //thread.start()
 
         textView.text = "連線..."
         //client.dispatcher().executorService().shutdown()
@@ -436,8 +599,6 @@ class Frag1 : Fragment() {
     // ===================== Tcp Connection Section (end) ===================== //
 
 
-
-
     private fun startRecording() {
         audioRecorder?.startRecording()
 
@@ -451,25 +612,25 @@ class Frag1 : Fragment() {
         audioRecorder = null
     }
 
-    // press '錄音' button to invoke this function
+    // press '連線' button to invoke this function
     private fun pressButton() {
-        if(!flag) {
+        if(!connectionButtonFlag) {
             button.isEnabled = false
-            flag = true
+            connectionButtonFlag = true
             button.text = "斷線"
             connect()
 
         }
         else {
             button.isEnabled = false
-            flag = false
+            connectionButtonFlag = false
             button.text = "連線"
             disconnect()
 
 
             // 3. close tcp socket
-            val thread = Thread(Runnable { disconnectTcpSocket() })
-            thread.start()
+            //val thread = Thread(Runnable { disconnectTcpSocket() })
+            //thread.start()
         }
     }
 
