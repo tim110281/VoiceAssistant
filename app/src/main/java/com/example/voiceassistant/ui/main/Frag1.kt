@@ -173,7 +173,7 @@ class Frag1 : Fragment() {
             else {
                 var newString = ""
                 val arrayofString = textView.text.split("\n")
-                if(arrayofString.size > 3) {
+                if(arrayofString.size > 7) {
                     val subArrayofString = arrayofString.subList(1, arrayofString.size)
                     newString = subArrayofString.joinToString("\n")
 
@@ -201,8 +201,9 @@ class Frag1 : Fragment() {
     }
 
     // =================== 解析語音文字，做對應的工作 (begin)=================== //
+    var isSentenceOver:Boolean = false
+    var wholeSpeech = ""
     fun parseCommandText(text: String) {
-
         if("登錄" in text) {
             output("登錄")
             if(name != "" && name != "Name" && ID != "" && ID != "ID") {
@@ -295,7 +296,20 @@ class Frag1 : Fragment() {
 
         }
         else {
-            database.child("command").setValue(text)
+            /*if("患者編號" in text) {
+                isSentenceOver = false
+                database.child("command").setValue(text)
+            }*/
+            if(text.takeLast(2) == "結束") {
+                isSentenceOver = true
+                database.child("command").setValue(wholeSpeech + text)
+                wholeSpeech = ""
+            }
+            else {
+                wholeSpeech += text
+                isSentenceOver = false
+            }
+
         }
 
     }
@@ -305,11 +319,26 @@ class Frag1 : Fragment() {
     private fun getTenDigit(num: Double) : Int{
         return num.toInt() % 10
     }
+
+    private fun isNormalNumber(str: String) : Boolean {
+        if("十" in str) {
+            return true
+        }
+        if("百" in str) {
+            return true
+        }
+        if("千" in str) {
+            return true
+        }
+        return false
+    }
+
     fun chineseToNum(str: String) : String {
-        var newString: String = ""
-        var total:Double = 0.0
+        var newString: String = str
+        var total = 0.0
         var numberBeginIndex = -1
         var flag = false
+        var isRealNumber = false
         var isDecimal = false
         var decimalOrder = 0.1
         var numberEndIndex = str.length
@@ -317,7 +346,7 @@ class Frag1 : Fragment() {
         for(i in 0..(str.length-1)) {
             if(chineseNum.keys.contains(str[i].toString())) {
                 if(isDecimal) {
-                    total += chineseNum.getValue(str[i].toString())*decimalOrder
+                    total += chineseNum.getValue(str[i].toString()).toDouble()*decimalOrder
                     decimalOrder *= 0.1
                 }
                 else if(!flag) {
@@ -326,12 +355,21 @@ class Frag1 : Fragment() {
 
                     if(str[i] == '百') {
                         total += 100
+                        isRealNumber = true
                     }
                     else if(str[i] == '千') {
                         total += 1000
+                        isRealNumber = true
                     }
                     else {
-                        total += chineseNum.getValue(str[i].toString())
+                        if(isRealNumber) {
+                            total += chineseNum.getValue(str[i].toString())
+                        }
+                        else {
+                            total *= 10
+                            total += chineseNum.getValue(str[i].toString())
+                        }
+
                     }
                 }
                 else {
@@ -339,36 +377,46 @@ class Frag1 : Fragment() {
                         var tmp:Int = getTenDigit(total)
                         total -= tmp
                         total += (tmp*10)
+                        isRealNumber = true
                     }
                     else if(str[i] == '百') {
                         var tmp:Int = getTenDigit(total)
                         total -= tmp
                         total += (tmp*100)
+                        isRealNumber = true
                     }
                     else if(str[i] == '千') {
                         var tmp:Int = getTenDigit(total)
                         total -= tmp
                         total += (tmp*1000)
+                        isRealNumber = true
                     }
                     else {
-                        total += chineseNum.getValue(str[i].toString())
+                        if(isRealNumber) {
+                            total += chineseNum.getValue(str[i].toString())
+                        }
+                        else {
+                            total *= 10
+                            total += chineseNum.getValue(str[i].toString())
+                        }
                     }
                 }
             }
             else {
-                if(str[i].toString() == "點") {
+                if(str[i] == '點') {
                     isDecimal = true
                     decimalOrder = 0.1
                 }
                 else if(flag) {
                     if(isDecimal) {
-                        newString = str.replace(str.substring(numberBeginIndex, i), total.toInt().toString())
+                        newString = str.replace(str.substring(numberBeginIndex, i), total.toString())
                     }
                     else {
-                        newString = str.replace(str.substring(numberBeginIndex, i), total.toString())
+                        newString = str.replace(str.substring(numberBeginIndex, i), total.toInt().toString())
                     }
                     numberBeginIndex = -1
                     flag = false
+                    isRealNumber = false
                     isDecimal = false
                     total = 0.0
                 }
@@ -377,10 +425,10 @@ class Frag1 : Fragment() {
 
         if(numberBeginIndex != -1) {
             if(isDecimal) {
-                newString = str.replace(str.substring(numberBeginIndex, str.length), total.toInt().toString())
+                newString = str.replace(str.substring(numberBeginIndex, str.length), total.toString())
             }
             else {
-                newString = str.replace(str.substring(numberBeginIndex, str.length), total.toString())
+                newString = str.replace(str.substring(numberBeginIndex, str.length), total.toInt().toString())
             }
         }
 
@@ -408,8 +456,6 @@ class Frag1 : Fragment() {
 
             output("開始錄音")
             activity?.runOnUiThread { button.isEnabled = true }
-
-            parseCommandText("打電話")
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
@@ -417,7 +463,6 @@ class Frag1 : Fragment() {
             output("onMessage byteString: $bytes")
         }
 
-        var wholeSpeech = ""
         var line = ""
         var recvTextData = ""
         var isAppendedFlag: Boolean = false   // check if the recvText is appended to wholeSpeech
@@ -434,15 +479,14 @@ class Frag1 : Fragment() {
 
             if(line!="") {
                 if(sameCharNum(recvTextData, line) == 0 || sameCharNum(recvTextData,line) == recvTextData.length) {
-                    wholeSpeech = wholeSpeech + line + "\t"
+                    //wholeSpeech = wholeSpeech + line + "\t"
                     isAppendedFlag = true
+                    output("parse:$line")
                     parseCommandText(line)
                 }
             }
             line = recvTextData
 
-
-            output("onMessage: $line")
             output("onMessage: " + chineseToNum(line))
         }
 
@@ -454,7 +498,7 @@ class Frag1 : Fragment() {
             stopRecording()
 
             if(!isAppendedFlag) {
-                wholeSpeech = wholeSpeech + line + "\t"
+                //wholeSpeech = wholeSpeech + line + "\t"
             }
 
             /*// 1. create a json format which contains speech and patients' info
