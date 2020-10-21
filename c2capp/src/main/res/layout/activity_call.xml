@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".CallSessionActivity">
+
+    <TextView
+        android:id="@+id/textView_dialLog"
+        android:layout_width="270dp"
+        android:layout_height="26dp"
+        android:layout_marginTop="124dp"
+        android:minLines="100"
+        android:scrollbars="vertical"
+        android:singleLine="false"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.496"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/surfaceView_remoteView" />
+
+    <SurfaceView
+        android:id="@+id/surfaceView_remoteView"
+        android:layout_width="0dp"
+        android:layout_height="471dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/textView_loginState" />
+
+    <SurfaceView
+        android:id="@+id/surfaceView_localVIew"
+        android:layout_width="95dp"
+        android:layout_height="133dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/surfaceView_remoteView" />
+
+    <TextView
+        android:id="@+id/textView_call_loginState"
+        android:layout_width="0dp"
+        android:layout_height="19dp"
+        android:background="@android:color/holo_red_dark"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <LinearLayout
+        android:id="@+id/layout_answer"
+        android:layout_width="352dp"
+        android:layout_height="121dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/surfaceView_remoteView">
+        <Button
+            android:id="@+id/button_hold"
+            android:layout_width="88dp"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="40dp"
+            android:layout_marginTop="40dp"
+            android:layout_marginEnd="40dp"
+            android:layout_marginRight="40dp"
+            android:layout_weight="1"
+            android:onClick="onClickHold"
+            android:text="Hold" />
+
+        <Button
+            android:id="@+id/button_hangup"
+            android:layout_width="88dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="40dp"
+            android:layout_marginLeft="40dp"
+            android:layout_marginTop="40dp"
+            android:layout_marginRight="40dp"
+            android:layout_weight="1"
+            android:onClick="onClickHangup"
+            android:text="Hangup" />
+
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/layout_incooming"
+        android:layout_width="352dp"
+        android:layout_height="121dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/surfaceView_remoteView">
+        <Button
+            android:id="@+id/button_callee_hangup"
+            android:layout_width="88dp"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="40dp"
+            android:layout_marginTop="40dp"
+            android:layout_marginEnd="40dp"
+            android:layout_marginRight="40dp"
+            android:layout_weight="1"
+            android:onClick="onClickHangup"
+            android:text="HangUp" />
+        <Button
+            android:id="@+id/button_callee_answer"
+            android:layout_width="88dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="40dp"
+            android:layout_marginLeft="40dp"
+            android:layout_marginTop="40dp"
+            android:layout_marginRight="40dp"
+            android:layout_weight="1"
+            android:onClick="onClickAnswer"
+            android:text="Answer" />
+
+
+    </LinearLayout>
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>
