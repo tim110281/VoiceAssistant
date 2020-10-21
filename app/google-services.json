@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "686311072600",
+    "firebase_url": "https://voiceassistant-424d9.firebaseio.com",
+    "project_id": "voiceassistant-424d9",
+    "storage_bucket": "voiceassistant-424d9.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:686311072600:android:b51def9b2e8430c66abb2d",
+        "android_client_info": {
+          "package_name": "com.example.voiceassistant"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "686311072600-gfh9de7d11td5fted0beiaqeddutghso.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.voiceassistant",
+            "certificate_hash": "db23d0e267b28b8c8affdb752fe458651a118636"
+          }
+        },
+        {
+          "client_id": "686311072600-s39abe0o2in40c8okjl0uadhv5cq68sk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIYvaMxOocC9cBPDUzZPWPuH_UMJvtn3o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "686311072600-s39abe0o2in40c8okjl0uadhv5cq68sk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
