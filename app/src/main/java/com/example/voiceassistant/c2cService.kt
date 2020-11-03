@@ -1,11 +1,16 @@
 package com.example.voiceassistant
 
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Binder
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.example.voiceassistant.ui.main.Frag1
 import com.iptnet.voipframework.*
 
 class c2cService : Service() {
@@ -17,6 +22,10 @@ class c2cService : Service() {
         val service: c2cService
             get() = this@c2cService
     }
+
+    lateinit var main2activity:Intent
+    lateinit var frag1:Intent
+    var isRecord = false
 
     // ======================= c2c (begin) ======================= //
 
@@ -55,10 +64,14 @@ class c2cService : Service() {
             Log.i("Msg:", "Incoming")
             callin_vhd = info
 
-            val intent = Intent(this@c2cService, Main2Activity::class.java)
-            intent.putExtra("callerOrcallee", false)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
+            callOrAnswerFlag = false
+
+            main2activity = Intent(this@c2cService, Main2Activity::class.java)
+            //val intent = Intent(this@c2cService, Main2Activity::class.java)
+            main2activity.putExtra("callerOrcallee", false)
+            main2activity.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(main2activity)
+
         }
         override fun onAnswer(info: VOIPSessionInfo) {
             Log.i("Msg:", "Answer")
@@ -74,6 +87,7 @@ class c2cService : Service() {
         override fun onTransfer(info: VOIPSessionInfo) {}
         override fun onReceiveAlert(info: VOIPSessionInfo) {}
         override fun onTerminated(info: VOIPSessionInfo) {
+
             when (info.message) {
                 VOIP.VOIPMainEvents.VOIP_404_EVENT -> {
                 }
@@ -118,13 +132,23 @@ class c2cService : Service() {
                 else -> {
                 }
             }
-            voip.stopAudioPlayAndRec()
+            if (!isRecord) {
+                voip.stopAudioPlayAndRec()
+            }
+
+            Log.i("Msg", "stopRec")
             voip.stopPlayVideo()
             voip.stopRecordVideo()
+
+            var intent = Intent()
+            intent.putExtra("state", true)
+            intent.action = "voipMsg"
+            sendBroadcast(intent)
         }
     }
 
     fun call(calleeid:String) {
+        callOrAnswerFlag = true
         callout_vhd = voip.createNewSession()
         val ret = voip.call(callout_vhd, calleeid)
         if ( ret < 0)
@@ -136,6 +160,15 @@ class c2cService : Service() {
         else
         {
             Log.i("call", "succeed")
+        }
+    }
+
+    fun hangup(callerOrcallee:Boolean) {
+        if(callerOrcallee) {
+            voip.hangUp(callout_vhd)
+        }
+        else {
+            voip.hangUp(callin_vhd)
         }
     }
 
@@ -173,10 +206,22 @@ class c2cService : Service() {
 
         voip.addOnVOIPSessionListener(mOnVOIPSessionListener)
 
+        val intentFilter = IntentFilter("audioRec")
+        registerReceiver(isRecordingReceiver, intentFilter)
+
         return super.onStartCommand(intent, flags, startId)
     }
 
     override fun onBind(intent: Intent): IBinder {
+        val name = intent.getStringExtra("name")
+        if (name == "Frag1") {
+            frag1 = intent
+
+        }
+        else {
+            main2activity = intent
+        }
+
         return myBinder
     }
 
@@ -186,5 +231,14 @@ class c2cService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+    }
+
+    private val isRecordingReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if ("audioRec" == intent.action) {
+                isRecord = intent.getBooleanExtra("isRecord", false)
+
+            }
+        }
     }
 }

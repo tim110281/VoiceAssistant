@@ -133,6 +133,7 @@ class Frag1 : Fragment() {
         serviceIntent = Intent(this.activity, c2cService::class.java)
         serviceIntent.putExtra("c2cAccount", "VOIP0001@jalabell.iptnet.net")
         serviceIntent.putExtra("c2cPassword", "voip1234")
+        serviceIntent.putExtra("name", "Frag1")
         this.activity?.startService(serviceIntent)
         this.activity?.bindService(serviceIntent, mC2cServiceConnection, Service.BIND_AUTO_CREATE)
 
@@ -286,8 +287,8 @@ class Frag1 : Fragment() {
                 putExtra("callerOrcallee", true)
                 putExtra("callee", "VOIP0002@jalabell.iptnet.net")
             }
-            startActivity(intent)
 
+            startActivity(intent)
         }
         else if("記錄" in text) {
 
@@ -451,6 +452,11 @@ class Frag1 : Fragment() {
                 AudioSource, SampleRate, Channel,
                 EncodingType, bufferSizeInByte
             )
+            var tmpIntent = Intent()
+            tmpIntent.putExtra("isRecord", true)
+            tmpIntent.action = "audioRec"
+            activity?.sendBroadcast(tmpIntent)
+
             isRecord = true
             startRecording()
 
@@ -494,6 +500,11 @@ class Frag1 : Fragment() {
             super.onClosed(webSocket, code, reason)
 
             // 0. stop recording
+            var tmpIntent = Intent()
+            tmpIntent.putExtra("isRecord", false)
+            tmpIntent.action = "audioRec"
+            activity?.sendBroadcast(tmpIntent)
+
             isRecord = false
             stopRecording()
 
@@ -538,6 +549,11 @@ class Frag1 : Fragment() {
             output("onClosing: $code/$reason")
             output("結束錄音")
             if(isRecord) {
+                var tmpIntent = Intent()
+                tmpIntent.putExtra("isRecord", false)
+                tmpIntent.action = "audioRec"
+                activity?.sendBroadcast(tmpIntent)
+
                 isRecord = false
                 stopRecording()
 
@@ -552,6 +568,12 @@ class Frag1 : Fragment() {
             output("onFailure: " + t.localizedMessage)
 
             disconnect()
+
+            var tmpIntent = Intent()
+            tmpIntent.putExtra("isRecord", false)
+            tmpIntent.action = "audioRec"
+            activity?.sendBroadcast(tmpIntent)
+
             isRecord = false
             stopRecording()
             socket?.close()
@@ -663,6 +685,8 @@ class Frag1 : Fragment() {
             connectionButtonFlag = true
             button.text = "斷線"
             connect()
+
+            parseCommandText("打電話")
 
         }
         else {

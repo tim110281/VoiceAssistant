@@ -29,10 +29,11 @@
 
     <SurfaceView
         android:id="@+id/surfaceView"
-        android:layout_width="347dp"
-        android:layout_height="415dp"
-        android:layout_marginTop="20dp"
+        android:layout_width="278dp"
+        android:layout_height="293dp"
+        android:layout_marginTop="140dp"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.496"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 

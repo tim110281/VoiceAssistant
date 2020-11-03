@@ -2,14 +2,12 @@ package com.example.voiceassistant
 
 import android.Manifest
 import android.app.Service
-import android.content.ComponentName
-import android.content.ContentValues
-import android.content.Intent
-import android.content.ServiceConnection
+import android.content.*
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
 import android.util.Log
 import android.widget.Toast
@@ -52,12 +50,18 @@ class Main2Activity : AppCompatActivity() {
 
         callerOrcallee = intent.getBooleanExtra("callerOrcallee", false)
 
-        // start c2c service
+        // bind c2c service
         var serviceIntent = Intent(this, c2cService::class.java)
+
         this.bindService(serviceIntent, mC2cServiceConnection, Service.BIND_AUTO_CREATE)
 
+        button2.isEnabled = false
+        button3.isEnabled = false
         button2.setOnClickListener { hangup() }
         button3.setOnClickListener { answer() }
+
+        val intentFilter = IntentFilter("voipMsg")
+        registerReceiver(voipStateReceiver, intentFilter)
     }
 
     override fun onDestroy() {
@@ -69,8 +73,23 @@ class Main2Activity : AppCompatActivity() {
         override fun onServiceConnected(name: ComponentName?, service: IBinder) {
             myC2cService = (service as c2cService.MyBinder).service
 
-            myC2cService?.voip?.setLocalView(surfaceView2)
+            this@Main2Activity.runOnUiThread {
+                button2.isEnabled = true
+                button3.isEnabled = true
+            }
+
             myC2cService?.voip?.setRemoteView(surfaceView)
+            myC2cService?.voip?.setLocalView(surfaceView2)
+
+
+            val r = Runnable {
+                if(callerOrcallee) {
+                    val callee = intent.getStringExtra("callee")
+                    myC2cService?.call(callee)
+                    button3.isEnabled = false
+                }
+            }
+            Handler().postDelayed(r,3000)
 
             if(callerOrcallee) {
                 val callee = intent.getStringExtra("callee")
@@ -89,7 +108,7 @@ class Main2Activity : AppCompatActivity() {
 
 
 
-    private fun hangup() {
+    /*private fun hangup() {
         if(callerOrcallee) {
             myC2cService?.voip?.hangUp(myC2cService?.callout_vhd!!)
         }
@@ -97,12 +116,30 @@ class Main2Activity : AppCompatActivity() {
             myC2cService?.voip?.hangUp(myC2cService?.callin_vhd!!)
         }
         Log.i("Msg:", "Main2Activity hangup")
-        this.unbindService(mC2cServiceConnection)
-        this.finish()
+
         //this.onDestroy()
+    }*/
+
+    private fun hangup() {
+        myC2cService?.hangup(callerOrcallee)
     }
 
+
+
     private fun answer() {
+        button3.isEnabled = false
         myC2cService?.answer()
+    }
+
+    private val voipStateReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if ("voipMsg" == intent.action) {
+                if (intent.getBooleanExtra("state", false)) {
+                    this@Main2Activity.unbindService(mC2cServiceConnection)
+                    this@Main2Activity.finish()
+                }
+                Log.i("TESTING:", "receive state")
+            }
+        }
     }
 }
